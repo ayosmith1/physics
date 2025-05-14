@@ -1,0 +1,173 @@
+// ===== Circle Class =====
+class Circle {
+  constructor(x, y, r) {
+    this.pos = createVector(x, y);
+    this.vel = p5.Vector.random2D().mult(random(1, 2));
+    this.acc = createVector(0, 0);
+    this.r = r;
+    this.mass = r * 0.1;
+  }
+
+  applyForce(force) {
+    let f = p5.Vector.div(force, this.mass);
+    this.acc.add(f);
+  }
+
+  applyGravity() {
+    let gravity = createVector(0, 0.3);
+    this.applyForce(gravity);
+  }
+
+  applyWind() {
+    let wind = createVector(1, 0);
+    this.applyForce(wind);
+  }
+
+  update() {
+    this.vel.add(this.acc);
+    this.pos.add(this.vel);
+    this.acc.set(0, 0);
+  }
+
+  checkEdges() {
+    if (this.pos.x - this.r < 0) {
+      this.pos.x = this.r;
+      this.vel.x *= -1;
+    } else if (this.pos.x + this.r > width) {
+      this.pos.x = width - this.r;
+      this.vel.x *= -1;
+    }
+
+    if (this.pos.y - this.r < 0) {
+      this.pos.y = this.r;
+      this.vel.y *= -1;
+    } else if (this.pos.y + this.r > height) {
+      this.pos.y = height - this.r;
+      this.vel.y *= -0.9;
+    }
+  }
+
+  checkCollision(other) {
+    let d = p5.Vector.dist(this.pos, other.pos);
+    let minDist = this.r + other.r;
+
+    if (d < minDist) {
+      let overlap = minDist - d;
+      let direction = p5.Vector.sub(this.pos, other.pos).normalize();
+      this.pos.add(p5.Vector.mult(direction, overlap / 2));
+      other.pos.sub(p5.Vector.mult(direction, overlap / 2));
+
+      let normal = p5.Vector.sub(other.pos, this.pos).normalize();
+      let relativeVelocity = p5.Vector.sub(this.vel, other.vel);
+      let speed = relativeVelocity.dot(normal);
+
+      if (speed < 0) return;
+
+      let impulse = (2 * speed) / (this.mass + other.mass);
+      this.vel.sub(p5.Vector.mult(normal, impulse * other.mass));
+      other.vel.add(p5.Vector.mult(normal, impulse * this.mass));
+    }
+  }
+
+  display() {
+    fill(0, 255, 100);      // Green fill
+    stroke(255, 255, 0);    // Yellow outline
+    strokeWeight(2);
+    ellipse(this.pos.x, this.pos.y, this.r * 2);
+  }
+}
+
+// ===== Sketch Code =====
+let circles = [];
+let liquidY;
+
+function setup() {
+  createCanvas(800, 500);
+  liquidY = height * 0.7;
+
+  for (let i = 0; i < 10; i++) {
+    let r = random(20, 40);
+    let x = random(r, width - r);
+    let y = random(r, liquidY - r); // Start above the liquid
+    circles.push(new Circle(x, y, r));
+  }
+}
+
+function draw() {
+  background(30);
+
+  // Draw liquid area
+  noStroke();
+  fill(50, 100, 255, 100);
+  rect(0, liquidY, width, height - liquidY);
+
+  for (let c of circles) {
+    c.applyGravity();
+
+    // Apply drag if in the liquid
+    if (c.pos.y + c.r > liquidY) {
+      let drag = c.vel.copy();
+      drag.normalize();
+      drag.mult(-1);
+      let speedSq = c.vel.magSq();
+      let dragCoeff = 0.1;
+      drag.setMag(dragCoeff * speedSq);
+      c.applyForce(drag);
+    }
+
+    c.update();
+    c.checkEdges();
+  }
+
+  // Handle collisions
+  for (let i = 0; i < circles.length; i++) {
+    for (let j = i + 1; j < circles.length; j++) {
+      circles[i].checkCollision(circles[j]);
+    }
+  }
+
+  // Show circles
+  for (let c of circles) {
+    c.display();
+  }
+}
+
+// Keyboard interactivity
+function keyPressed() {
+  let force = createVector(0, 0);
+
+  if (keyCode === LEFT_ARROW) {
+    force.x = -0.5;
+  } else if (keyCode === RIGHT_ARROW) {
+    force.x = 0.5;
+  } else if (keyCode === UP_ARROW) {
+    force.y = -0.5;
+  } else if (keyCode === DOWN_ARROW) {
+    force.y = 0.5;
+  }
+
+  if (force.mag() > 0) {
+    for (let c of circles) {
+      c.applyForce(force);
+    }
+  }
+
+  // Wind with spacebar
+  if (key === ' ') {
+    for (let c of circles) {
+      c.applyWind();
+    }
+  }
+}
+
+// Mouse repels circles
+function mousePressed() {
+  for (let c of circles) {
+    let dir = p5.Vector.sub(c.pos, createVector(mouseX, mouseY));
+    let distance = max(dir.mag(), 10); // avoid divide-by-zero
+    dir.normalize();
+    let strength = 100 / distance;
+    dir.mult(strength);
+    c.applyForce(dir);
+  }
+}
